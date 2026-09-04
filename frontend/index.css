@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+body {
+	margin: 0;
+	background-color: #faf8f2;
+	background-image:
+		linear-gradient(rgba(26, 36, 64, 0.06) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(26, 36, 64, 0.06) 1px, transparent 1px);
+	background-size: 24px 24px;
+	color: #1a2440;
+	font-family: "Coming Soon", cursive;
+	font-size: 1rem;
+	font-weight: 400;
+}
