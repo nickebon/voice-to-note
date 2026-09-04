@@ -1,0 +1,3 @@
+Turn the transcript below into a clean, casual, lightly structured clinical session note for personal reference. Keep the language plain and concise. Use short headings such as Summary, Observations, Activities, and Next Steps when the transcript supports them. Do not invent details, diagnoses, or clinical terminology that are not present in the transcript. This is not an official report.
+
+Transcript:
