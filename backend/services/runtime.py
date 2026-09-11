@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -18,7 +19,8 @@ def bundled_resource_root() -> Path:
 
 def load_backend_env() -> Path:
 	env_path = backend_root() / ".env"
-	load_dotenv(env_path)
+	if not os.getenv("OPENAI_API_KEY"):
+		load_dotenv(env_path)
 	return env_path
 
 

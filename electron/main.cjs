@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, nativeImage } = require("electron/main");
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage } = require("electron/main");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -13,7 +13,7 @@ const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}/docs`;
 const BACKEND_EXECUTABLE = path.join(PROJECT_ROOT, "backend", "dist", "voice-to-note-backend");
 const BACKEND_ENV_FILE = path.join(PROJECT_ROOT, "backend", ".env");
 const APP_ICON_PNG = path.join(PROJECT_ROOT, "electron", "assets", "icon.png");
-const APP_ICON_ICNS = path.join(PROJECT_ROOT, "electron", "assets", "icon.icns");
+const PRELOAD_SCRIPT = path.join(PROJECT_ROOT, "electron", "preload.cjs");
 
 let backendProcess = null;
 let mainWindow = null;
@@ -57,6 +57,123 @@ function loadBackendEnv() {
 	return parseDotenv(fs.readFileSync(BACKEND_ENV_FILE, "utf8"));
 }
 
+function apiKeyStorePath() {
+	return path.join(app.getPath("userData"), "openai-api-key.json");
+}
+
+async function isEncryptionAvailable() {
+	if (typeof safeStorage.isAsyncEncryptionAvailable === "function") {
+		return safeStorage.isAsyncEncryptionAvailable();
+	}
+	return safeStorage.isEncryptionAvailable();
+}
+
+async function encryptString(plainText) {
+	if (typeof safeStorage.encryptStringAsync === "function") {
+		return safeStorage.encryptStringAsync(plainText);
+	}
+	return safeStorage.encryptString(plainText);
+}
+
+async function decryptString(encryptedBuffer) {
+	if (typeof safeStorage.decryptStringAsync === "function") {
+		const decrypted = await safeStorage.decryptStringAsync(encryptedBuffer);
+		if (typeof decrypted === "string") {
+			return { result: decrypted, shouldReEncrypt: false };
+		}
+		return decrypted;
+	}
+
+	return {
+		result: safeStorage.decryptString(encryptedBuffer),
+		shouldReEncrypt: false,
+	};
+}
+
+async function readStoredApiKeyRecord() {
+	try {
+		const fileContents = await fs.promises.readFile(apiKeyStorePath(), "utf8");
+		const record = JSON.parse(fileContents);
+		if (!record || typeof record.encrypted !== "string") {
+			return null;
+		}
+		return record;
+	} catch (error) {
+		if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+			return null;
+		}
+		throw error;
+	}
+}
+
+async function persistApiKey(apiKey) {
+	const trimmedKey = apiKey.trim();
+	if (!trimmedKey) {
+		throw new Error("Please enter an API key.");
+	}
+
+	if (!(await isEncryptionAvailable())) {
+		throw new Error("Secure storage is not available on this device.");
+	}
+
+	const encrypted = await encryptString(trimmedKey);
+	const record = {
+		version: 1,
+		encrypted: encrypted.toString("base64"),
+	};
+
+	await fs.promises.mkdir(path.dirname(apiKeyStorePath()), { recursive: true });
+	await fs.promises.writeFile(apiKeyStorePath(), JSON.stringify(record), "utf8");
+	return trimmedKey;
+}
+
+async function getStoredApiKey() {
+	const record = await readStoredApiKeyRecord();
+	if (!record) {
+		return null;
+	}
+
+	const decrypted = await decryptString(Buffer.from(record.encrypted, "base64"));
+	if (decrypted.shouldReEncrypt) {
+		await persistApiKey(decrypted.result);
+	}
+
+	return decrypted.result;
+}
+
+async function clearStoredApiKey() {
+	try {
+		await fs.promises.unlink(apiKeyStorePath());
+	} catch (error) {
+		if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+			throw error;
+		}
+	}
+}
+
+function registerIpcHandlers() {
+	ipcMain.handle("api-key:get-status", async () => {
+		try {
+			return { hasStoredApiKey: Boolean(await getStoredApiKey()) };
+		} catch (error) {
+			console.error("[electron] Failed to read stored API key:", error);
+			return { hasStoredApiKey: false };
+		}
+	});
+
+	ipcMain.handle("api-key:save", async (_event, apiKey) => {
+		const storedKey = await persistApiKey(String(apiKey || ""));
+		await restartBackend(storedKey);
+		return { hasStoredApiKey: true };
+	});
+
+	ipcMain.handle("api-key:clear", async () => {
+		await clearStoredApiKey();
+		await stopBackend();
+		return { hasStoredApiKey: false };
+	});
+}
+
 function pipePrefixed(stream, prefix) {
 	stream.setEncoding("utf8");
 	stream.on("data", (chunk) => {
@@ -68,7 +185,29 @@ function pipePrefixed(stream, prefix) {
 	});
 }
 
-function startBackend() {
+async function waitForProcessExit(childProcess) {
+	if (childProcess.exitCode !== null) {
+		return;
+	}
+
+	await new Promise((resolve) => {
+		const forceKillTimer = setTimeout(() => {
+			if (childProcess.exitCode === null) {
+				childProcess.kill("SIGKILL");
+			}
+		}, 5000);
+		forceKillTimer.unref();
+
+		childProcess.once("exit", () => {
+			clearTimeout(forceKillTimer);
+			resolve();
+		});
+
+		childProcess.kill("SIGTERM");
+	});
+}
+
+async function startBackend(apiKeyOverride) {
 	if (backendProcess) {
 		return;
 	}
@@ -79,29 +218,40 @@ function startBackend() {
 		);
 	}
 
+	const storedApiKey = apiKeyOverride ?? (await getStoredApiKey());
+	if (!storedApiKey) {
+		return;
+	}
+
 	const childEnv = {
 		...loadBackendEnv(),
 		...process.env,
+		OPENAI_API_KEY: storedApiKey,
 		PORT: BACKEND_PORT,
 	};
 
-	backendProcess = spawn(BACKEND_EXECUTABLE, [], {
+	const childProcess = spawn(BACKEND_EXECUTABLE, [], {
 		cwd: path.dirname(BACKEND_EXECUTABLE),
 		env: childEnv,
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 
-	pipePrefixed(backendProcess.stdout, "[backend] ");
-	pipePrefixed(backendProcess.stderr, "[backend] ");
+	childProcess.expectedStop = false;
+	backendProcess = childProcess;
 
-	backendProcess.on("error", (error) => {
+	pipePrefixed(childProcess.stdout, "[backend] ");
+	pipePrefixed(childProcess.stderr, "[backend] ");
+
+	childProcess.on("error", (error) => {
 		console.error("[electron] Backend process failed to start:", error);
 	});
 
-	backendProcess.on("exit", (code, signal) => {
+	childProcess.on("exit", (code, signal) => {
 		console.log(`[electron] Backend process exited (code=${code}, signal=${signal}).`);
-		backendProcess = null;
-		if (!isQuitting) {
+		if (backendProcess === childProcess) {
+			backendProcess = null;
+		}
+		if (!isQuitting && !childProcess.expectedStop) {
 			dialog.showErrorBox(
 				"Backend stopped",
 				`The backend executable exited unexpectedly (code=${code}, signal=${signal}).`,
@@ -109,28 +259,25 @@ function startBackend() {
 			app.quit();
 		}
 	});
+
+	await waitForUrl(BACKEND_URL, "packaged backend");
 }
 
-function stopBackend() {
+async function stopBackend() {
 	if (!backendProcess) {
 		return;
 	}
 
 	const processToStop = backendProcess;
 	backendProcess = null;
+	processToStop.expectedStop = true;
 
-	if (processToStop.exitCode !== null) {
-		return;
-	}
+	await waitForProcessExit(processToStop);
+}
 
-	processToStop.kill("SIGTERM");
-
-	const forceKillTimer = setTimeout(() => {
-		if (processToStop.exitCode === null) {
-			processToStop.kill("SIGKILL");
-		}
-	}, 5000);
-	forceKillTimer.unref();
+async function restartBackend(apiKeyOverride) {
+	await stopBackend();
+	await startBackend(apiKeyOverride);
 }
 
 function wait(ms) {
@@ -186,6 +333,7 @@ async function createMainWindow() {
 		icon: APP_ICON_PNG,
 		webPreferences: {
 			contextIsolation: true,
+			preload: PRELOAD_SCRIPT,
 			sandbox: true,
 		},
 	});
@@ -203,34 +351,35 @@ async function createMainWindow() {
 
 async function boot() {
 	app.setName(APP_NAME);
+	registerIpcHandlers();
 
 	if (process.platform === "darwin" && app.dock && fs.existsSync(APP_ICON_PNG)) {
 		app.dock.setIcon(nativeImage.createFromPath(APP_ICON_PNG));
 	}
 
-	startBackend();
-	await Promise.all([
-		waitForUrl(BACKEND_URL, "packaged backend"),
-		waitForUrl(FRONTEND_URL, "Vite dev server"),
-	]);
+	await waitForUrl(FRONTEND_URL, "Vite dev server");
 	await createMainWindow();
+
+	if (await getStoredApiKey()) {
+		await startBackend();
+	}
 }
 
 app.on("window-all-closed", () => {
 	isQuitting = true;
-	stopBackend();
+	void stopBackend();
 	app.quit();
 });
 
 app.on("before-quit", () => {
 	isQuitting = true;
-	stopBackend();
+	void stopBackend();
 });
 
 app.whenReady().then(boot).catch((error) => {
 	console.error("[electron] Failed to start app:", error);
 	dialog.showErrorBox("Unable to start desktop app", error.message);
 	isQuitting = true;
-	stopBackend();
+	void stopBackend();
 	app.quit();
 });

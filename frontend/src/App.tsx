@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { structureNote } from "./api";
+import ApiKeySetup from "./components/ApiKeySetup";
 import NoteStructureConfig from "./components/NoteStructureConfig";
 import ResultsView from "./components/ResultsView";
 import TextNoteArea from "./components/TextNoteArea";
 import UploadArea from "./components/UploadArea";
 
-export default function App() {
-	const [view, setView] = useState<"input" | "structuring" | "results">("input");
+type NoteView = "input" | "structuring" | "results";
+type AppMode = "loading" | "setup" | "notes";
+
+function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | null }) {
+	const [view, setView] = useState<NoteView>("input");
 	const [transcript, setTranscript] = useState("");
 	const [structuredNote, setStructuredNote] = useState("");
 	const [extraNote, setExtraNote] = useState("");
@@ -49,7 +53,14 @@ export default function App() {
 
 	return (
 		<main className="mx-auto max-w-3xl space-y-8 p-6">
-			<h1 className="text-2xl font-bold">miss jo's notes</h1>
+			<div className="flex items-center justify-between gap-4">
+				<h1 className="text-2xl font-bold">miss jo&apos;s notes</h1>
+				{onManageApiKey ? (
+					<button type="button" className="text-sm underline underline-offset-2" onClick={onManageApiKey}>
+						Change API key
+					</button>
+				) : null}
+			</div>
 			<UploadArea onTranscript={setTranscript} />
 			<TextNoteArea value={extraNote} onChange={setExtraNote} />
 			<NoteStructureConfig
@@ -78,4 +89,103 @@ export default function App() {
 			{transcript && <p className="sr-only">Transcript ready for structuring.</p>}
 		</main>
 	);
+}
+
+export default function App() {
+	const hasElectronBridge = typeof window.electronApi !== "undefined";
+	const [appMode, setAppMode] = useState<AppMode>(hasElectronBridge ? "loading" : "notes");
+	const [hasStoredApiKey, setHasStoredApiKey] = useState(false);
+	const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+	const [apiKeyError, setApiKeyError] = useState("");
+
+	useEffect(() => {
+		if (!window.electronApi) {
+			return;
+		}
+
+		let isCancelled = false;
+
+		void window.electronApi
+			.getApiKeyStatus()
+			.then((status) => {
+				if (isCancelled) {
+					return;
+				}
+
+				setHasStoredApiKey(status.hasStoredApiKey);
+				setAppMode(status.hasStoredApiKey ? "notes" : "setup");
+			})
+			.catch((error: unknown) => {
+				if (isCancelled) {
+					return;
+				}
+
+				setApiKeyError(error instanceof Error ? error.message : "Unable to load API key status.");
+				setAppMode("setup");
+			});
+
+		return () => {
+			isCancelled = true;
+		};
+	}, []);
+
+	const handleSaveApiKey = async (apiKey: string) => {
+		if (!window.electronApi) {
+			return;
+		}
+
+		setIsSavingApiKey(true);
+		setApiKeyError("");
+
+		try {
+			const status = await window.electronApi.saveApiKey(apiKey);
+			setHasStoredApiKey(status.hasStoredApiKey);
+			setAppMode("notes");
+		} catch (error) {
+			setApiKeyError(error instanceof Error ? error.message : "Unable to save API key.");
+		} finally {
+			setIsSavingApiKey(false);
+		}
+	};
+
+	const handleClearApiKey = async () => {
+		if (!window.electronApi) {
+			return;
+		}
+
+		setIsSavingApiKey(true);
+		setApiKeyError("");
+
+		try {
+			const status = await window.electronApi.clearApiKey();
+			setHasStoredApiKey(status.hasStoredApiKey);
+			setAppMode("setup");
+		} catch (error) {
+			setApiKeyError(error instanceof Error ? error.message : "Unable to clear API key.");
+		} finally {
+			setIsSavingApiKey(false);
+		}
+	};
+
+	if (appMode === "loading") {
+		return (
+			<main className="mx-auto flex min-h-screen max-w-xl items-center justify-center px-6 py-10">
+				<p role="status">Loading your notes...</p>
+			</main>
+		);
+	}
+
+	if (appMode === "setup") {
+		return (
+			<ApiKeySetup
+				hasStoredApiKey={hasStoredApiKey}
+				isSaving={isSavingApiKey}
+				errorMessage={apiKeyError}
+				onSave={handleSaveApiKey}
+				onClear={hasStoredApiKey ? handleClearApiKey : undefined}
+			/>
+		);
+	}
+
+	return <NotesWorkspace onManageApiKey={window.electronApi ? () => setAppMode("setup") : null} />;
 }
