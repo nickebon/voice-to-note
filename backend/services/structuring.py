@@ -1,14 +1,11 @@
-from pathlib import Path
-
-from dotenv import load_dotenv
 from openai import OpenAI
 
+from services.runtime import load_backend_env, resource_path
 
-backend_path = Path(__file__).resolve().parent.parent
-load_dotenv(backend_path / ".env")
+load_backend_env()
 client = OpenAI()
 
-with (backend_path / "prompts" / "structuring_prompt.txt").open() as prompt_file:
+with resource_path("prompts", "structuring_prompt.txt").open() as prompt_file:
 	structuring_prompt = prompt_file.read()
 
 

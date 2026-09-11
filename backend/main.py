@@ -1,5 +1,8 @@
+import os
+
 from fastapi import FastAPI, File, UploadFile
 from pydantic import BaseModel
+import uvicorn
 
 from services.structuring import structure_transcript
 from services.transcription import transcribe_audio
@@ -28,3 +31,13 @@ async def structure(request: TranscriptRequest):
 		request.structure_instruction,
 	)
 	return {"structured_note": structured_note}
+
+
+def run() -> None:
+	host = os.getenv("HOST", "127.0.0.1")
+	port = int(os.getenv("PORT", "8000"))
+	uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+	run()

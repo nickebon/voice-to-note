@@ -1,11 +1,12 @@
 from mimetypes import guess_extension
 from pathlib import Path
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
+from services.runtime import load_backend_env
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+load_backend_env()
 client = OpenAI()
 
 SUPPORTED_AUDIO_EXTENSIONS = {

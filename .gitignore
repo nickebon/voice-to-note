@@ -8,3 +8,6 @@ venv/
 throwaway/
 dist/
 frontend/dist/
+build/
+*.spec
+.pyinstaller/
