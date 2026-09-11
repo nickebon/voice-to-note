@@ -49,7 +49,7 @@ export default function App() {
 
 	return (
 		<main className="mx-auto max-w-3xl space-y-8 p-6">
-			<h1 className="text-2xl font-bold">voice-to-note-v1</h1>
+			<h1 className="text-2xl font-bold">miss jo's notes</h1>
 			<UploadArea onTranscript={setTranscript} />
 			<TextNoteArea value={extraNote} onChange={setExtraNote} />
 			<NoteStructureConfig

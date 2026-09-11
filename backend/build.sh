@@ -18,5 +18,8 @@ PYINSTALLER_CONFIG_DIR="$PROJECT_ROOT/.pyinstaller" \
 	--noconfirm \
 	--onefile \
 	--name voice-to-note-backend \
+	--distpath "$BACKEND_DIR/dist" \
+	--workpath "$BACKEND_DIR/build" \
+	--specpath "$BACKEND_DIR" \
 	--add-data "$BACKEND_DIR/prompts/structuring_prompt.txt:prompts" \
 	"$BACKEND_DIR/main.py"

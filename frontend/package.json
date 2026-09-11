@@ -6,7 +6,8 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc -b && vite build",
-		"preview": "vite preview"
+		"preview": "vite preview",
+		"electron": "env -u ELECTRON_RUN_AS_NODE electron ../electron"
 	},
 	"dependencies": {
 		"react": "^19.1.1",
@@ -17,6 +18,7 @@
 		"@types/react-dom": "^19.1.7",
 		"@vitejs/plugin-react": "^5.0.2",
 		"autoprefixer": "^10.4.21",
+		"electron": "^33.4.11",
 		"postcss": "^8.5.6",
 		"tailwindcss": "^3.4.17",
 		"typescript": "^5.9.2",

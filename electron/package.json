@@ -1,0 +1,15 @@
+{
+	"name": "voice-to-note-electron",
+	"productName": "miss jo's notes",
+	"private": true,
+	"main": "main.cjs",
+	"build": {
+		"icon": "assets/icon.icns",
+		"mac": {
+			"icon": "assets/icon.icns"
+		},
+		"dmg": {
+			"icon": "assets/icon.icns"
+		}
+	}
+}
