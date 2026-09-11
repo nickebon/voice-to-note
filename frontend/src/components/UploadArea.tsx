@@ -4,10 +4,9 @@ import { transcribeAudio } from "../api";
 
 type UploadAreaProps = {
 	onTranscript: (transcript: string) => void;
-	onComplete: () => void;
 };
 
-export default function UploadArea({ onTranscript, onComplete }: UploadAreaProps) {
+export default function UploadArea({ onTranscript }: UploadAreaProps) {
 	const [file, setFile] = useState<File | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [isComplete, setIsComplete] = useState(false);
@@ -31,7 +30,6 @@ export default function UploadArea({ onTranscript, onComplete }: UploadAreaProps
 			const result = await transcribeAudio(selectedFile, abortController.signal);
 			onTranscript(result.transcript);
 			setIsComplete(true);
-			onComplete();
 		} catch (requestError) {
 			if (requestError instanceof DOMException && requestError.name === "AbortError") {
 				return;

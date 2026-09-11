@@ -17,6 +17,8 @@ cp .env.example .env
 uvicorn main:app --reload
 ```
 
+The backend virtual environment lives at `backend/.venv`. The disposable `throwaway/` folder is not required to run the app.
+
 ### Frontend
 
 In a second terminal:
@@ -26,5 +28,15 @@ cd frontend
 npm install
 npm run dev
 ```
+
+### Start both services
+
+From the project root, run:
+
+```sh
+./start.sh
+```
+
+This starts the backend and frontend together and opens the app at http://localhost:5173. Press Ctrl+C to stop both services.
 
 Implementation files are intentionally empty placeholders for now.
