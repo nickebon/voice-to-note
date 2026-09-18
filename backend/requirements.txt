@@ -3,3 +3,5 @@ uvicorn
 openai
 python-dotenv
 python-multipart
+# Build dependency for producing the standalone backend executable.
+pyinstaller

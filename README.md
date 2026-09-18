@@ -1,42 +1,9 @@
-# voice-to-note
+# miss jo's notes
 
-Proof-of-concept web app scaffold for turning voice memos into structured clinical notes.
+Made this for a girl I like. She's an occupational therapist.
 
-The backend will use FastAPI, and the frontend will use Vite, React, TypeScript, and Tailwind CSS. There is no database, authentication, or patient tagging in this project.
+It turns voice memos or rough typed notes into structured session notes, so there's less time spent writing everything up. Upload audio or type it out, add anything you missed, then create and copy the note. You can customise the format too.
 
-## Setup
+![miss jo's notes — the app interface](electron/assets/ui-1.png)
 
-### Backend
-
-```sh
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn main:app --reload
-```
-
-The backend virtual environment lives at `backend/.venv`. The disposable `throwaway/` folder is not required to run the app.
-
-### Frontend
-
-In a second terminal:
-
-```sh
-cd frontend
-npm install
-npm run dev
-```
-
-### Start both services
-
-From the project root, run:
-
-```sh
-./start.sh
-```
-
-This starts the backend and frontend together and opens the app at http://localhost:5173. Press Ctrl+C to stop both services.
-
-Implementation files are intentionally empty placeholders for now.
+Built with React, TypeScript, Python/FastAPI and Electron. Uses OpenAI for transcription and note generation.
