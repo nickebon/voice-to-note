@@ -88,7 +88,6 @@ function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | nul
 				) : null}
 			</div>
 			<section className="space-y-3">
-				<h2 className="text-lg font-semibold">Upload audio</h2>
 				<div className="inline-flex border border-gray-300" role="group" aria-label="Note input mode">
 					<button
 						type="button"
@@ -96,7 +95,7 @@ function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | nul
 						aria-pressed={inputMode === "record"}
 						onClick={() => changeInputMode("record")}
 					>
-						Record audio
+						Upload audio
 					</button>
 					<button
 						type="button"
@@ -104,7 +103,7 @@ function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | nul
 						aria-pressed={inputMode === "type"}
 						onClick={() => changeInputMode("type")}
 					>
-						Type it out instead
+						Type it out
 					</button>
 				</div>
 				{inputMode === "record" ? <UploadArea onTranscript={setTranscript} /> : null}
