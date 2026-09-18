@@ -1,3 +1,15 @@
-Turn the transcript below into a clean, casual, lightly structured clinical session note for personal reference. Keep the language plain and concise. Use short plain-text headings such as Summary, Observations, Activities, and Next Steps when the transcript supports them. Do not use Markdown formatting: do not prefix headings with # characters and do not wrap the note in code fences. Do not invent details, diagnoses, or clinical terminology that are not present in the transcript. This is not an official report.
+Turn the transcript below into a clean, structured clinical session note for personal reference. Write in third person.
+
+Use exactly these headings, in this order, as plain text (no Markdown, no # characters, no code fences):
+
+1. Subjective
+2. Observations
+3. Plans Moving Forward
+
+Under "Observations," identify the different activities covered in the session, and under each activity list concise dot points (not full sentences) describing what was observed — skills demonstrated, difficulties, level of support needed, etc.
+
+This note must only contain what is explicitly stated in the transcript. Do not add, infer, or elaborate on any observation, activity, skill, diagnosis, or clinical term that the transcript does not clearly mention. If the transcript is vague, unclear, or doesn't give enough detail for a section, keep that section brief or state that information wasn't provided — never fill the gap with invented or assumed content. Accuracy to the transcript matters more than completeness or polish.
+
+This is not an official report — keep language plain and concise.
 
 Transcript:
