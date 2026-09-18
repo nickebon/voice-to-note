@@ -3,21 +3,27 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
+const net = require("node:net");
 const path = require("node:path");
+const { startLocalServer } = require("./local-server.cjs");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const APP_NAME = "miss jo's notes";
 const FRONTEND_URL = process.env.ELECTRON_RENDERER_URL || "http://localhost:5173";
-const BACKEND_PORT = process.env.PORT || "8000";
-const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}/docs`;
-const BACKEND_EXECUTABLE = path.join(PROJECT_ROOT, "backend", "dist", "voice-to-note-backend");
+let backendPort = process.env.PORT || "8000";
+const BACKEND_EXECUTABLE = app.isPackaged
+	? path.join(process.resourcesPath, "backend", "voice-to-note-backend")
+	: path.join(PROJECT_ROOT, "backend", "dist", "voice-to-note-backend");
 const BACKEND_ENV_FILE = path.join(PROJECT_ROOT, "backend", ".env");
-const APP_ICON_PNG = path.join(PROJECT_ROOT, "electron", "assets", "icon.png");
-const PRELOAD_SCRIPT = path.join(PROJECT_ROOT, "electron", "preload.cjs");
+const APP_ICON_PNG = path.join(__dirname, "assets", "icon.png");
+const PRELOAD_SCRIPT = path.join(__dirname, "preload.cjs");
 
 let backendProcess = null;
 let mainWindow = null;
 let isQuitting = false;
+let frontendServer = null;
+let rendererUrl = FRONTEND_URL;
+let shutdownComplete = false;
 
 function parseDotenv(contents) {
 	const values = {};
@@ -50,7 +56,7 @@ function parseDotenv(contents) {
 }
 
 function loadBackendEnv() {
-	if (!fs.existsSync(BACKEND_ENV_FILE)) {
+	if (app.isPackaged || !fs.existsSync(BACKEND_ENV_FILE)) {
 		return {};
 	}
 
@@ -186,7 +192,7 @@ function pipePrefixed(stream, prefix) {
 }
 
 async function waitForProcessExit(childProcess) {
-	if (childProcess.exitCode !== null) {
+	if (childProcess.exitCode !== null || childProcess.signalCode !== null || !childProcess.pid) {
 		return;
 	}
 
@@ -214,7 +220,8 @@ async function startBackend(apiKeyOverride) {
 
 	if (!fs.existsSync(BACKEND_EXECUTABLE)) {
 		throw new Error(
-			`Backend executable not found at ${BACKEND_EXECUTABLE}. Run ./backend/build.sh first.`,
+			app.isPackaged ? "The note service is missing. Please reinstall the app."
+				: `Backend executable not found at ${BACKEND_EXECUTABLE}. Run ./backend/build.sh first.`,
 		);
 	}
 
@@ -227,7 +234,8 @@ async function startBackend(apiKeyOverride) {
 		...loadBackendEnv(),
 		...process.env,
 		OPENAI_API_KEY: storedApiKey,
-		PORT: BACKEND_PORT,
+		HOST: "127.0.0.1",
+		PORT: String(backendPort),
 	};
 
 	const childProcess = spawn(BACKEND_EXECUTABLE, [], {
@@ -260,7 +268,7 @@ async function startBackend(apiKeyOverride) {
 		}
 	});
 
-	await waitForUrl(BACKEND_URL, "packaged backend");
+	await waitForUrl(`http://127.0.0.1:${backendPort}/docs`, "bundled backend");
 }
 
 async function stopBackend() {
@@ -311,12 +319,13 @@ async function waitForUrl(url, label, timeoutMs = 30000) {
 
 	while (Date.now() < deadline) {
 		try {
-			await pingUrl(url);
-			return;
+			const status = await pingUrl(url);
+			if (status >= 200 && status < 400) return;
+			lastError = new Error(`HTTP ${status}`);
 		} catch (error) {
 			lastError = error;
-			await wait(500);
 		}
+		await wait(500);
 	}
 
 	const reason = lastError instanceof Error ? lastError.message : String(lastError);
@@ -346,7 +355,18 @@ async function createMainWindow() {
 		console.log("[electron] Frontend loaded in Electron window.");
 	});
 
-	await mainWindow.loadURL(FRONTEND_URL);
+	await mainWindow.loadURL(rendererUrl);
+}
+
+async function availablePort() {
+	const server = net.createServer();
+	await new Promise((resolve, reject) => {
+		server.once("error", reject);
+		server.listen(0, "127.0.0.1", resolve);
+	});
+	const port = server.address().port;
+	await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+	return port;
 }
 
 async function boot() {
@@ -357,29 +377,40 @@ async function boot() {
 		app.dock.setIcon(nativeImage.createFromPath(APP_ICON_PNG));
 	}
 
-	await waitForUrl(FRONTEND_URL, "Vite dev server");
-	await createMainWindow();
+	if (app.isPackaged) {
+		backendPort = await availablePort();
+		const frontend = await startLocalServer(path.join(process.resourcesPath, "frontend"), backendPort);
+		frontendServer = frontend.server;
+		rendererUrl = frontend.url;
+	} else {
+		await waitForUrl(FRONTEND_URL, "Vite dev server");
+	}
 
 	if (await getStoredApiKey()) {
 		await startBackend();
 	}
+	await createMainWindow();
 }
 
 app.on("window-all-closed", () => {
-	isQuitting = true;
-	void stopBackend();
 	app.quit();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+	if (shutdownComplete) return;
+	event.preventDefault();
+	if (isQuitting) return;
 	isQuitting = true;
-	void stopBackend();
+	void stopBackend().finally(() => {
+		frontendServer?.close();
+		frontendServer?.closeAllConnections();
+		shutdownComplete = true;
+		app.quit();
+	});
 });
 
 app.whenReady().then(boot).catch((error) => {
 	console.error("[electron] Failed to start app:", error);
 	dialog.showErrorBox("Unable to start desktop app", error.message);
-	isQuitting = true;
-	void stopBackend();
 	app.quit();
 });

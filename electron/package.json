@@ -1,15 +1,46 @@
 {
 	"name": "voice-to-note-electron",
+	"version": "1.0.0",
+	"description": "Turn session recordings and typed notes into structured notes.",
+	"author": "Nick Ebon",
 	"productName": "miss jo's notes",
 	"private": true,
 	"main": "main.cjs",
+	"scripts": {
+		"build:assets": "../backend/build.sh && npm --prefix ../frontend run build",
+		"dist:mac": "npm run build:assets && electron-builder --mac dmg --arm64 --publish never",
+		"test": "node --test tests/local-server.test.cjs",
+		"test:packaged": "node tests/packaged-smoke.cjs"
+	},
 	"build": {
+		"appId": "com.nickebon.voicetonote",
 		"icon": "assets/icon.icns",
+		"directories": { "output": "dist" },
+		"artifactName": "miss-jos-notes-${version}-${arch}.${ext}",
+		"files": ["main.cjs", "preload.cjs", "local-server.cjs", "assets/icon.png"],
+		"extraResources": [
+			{ "from": "../frontend/dist", "to": "frontend" },
+			{ "from": "../backend/dist/voice-to-note-backend", "to": "backend/voice-to-note-backend" }
+		],
 		"mac": {
-			"icon": "assets/icon.icns"
+			"icon": "assets/icon.icns",
+			"target": [{ "target": "dmg", "arch": ["arm64"] }],
+			"category": "public.app-category.productivity",
+			"identity": "-",
+			"hardenedRuntime": false,
+			"notarize": false
 		},
 		"dmg": {
-			"icon": "assets/icon.icns"
+			"icon": "assets/icon.icns",
+			"contents": [
+				{ "x": 130, "y": 220 },
+				{ "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+			]
 		}
+	},
+	"devDependencies": {
+		"electron": "44.4.2",
+		"electron-builder": "^26.15.3",
+		"playwright": "^1.63.0"
 	}
 }

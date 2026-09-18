@@ -1,6 +1,6 @@
 Turn the transcript below into a clean, structured clinical session note for personal reference. Write in third person.
 
-Use exactly these headings, in this order, as plain text (no Markdown, no # characters, no code fences):
+Use exactly these headings, in this order, as plain text (Do not use any Markdown formatting anywhere in the output — no asterisks for bold or italics (**text** or *text*), no numbered list syntax beyond plain dashes, and no other Markdown symbols. Activity names and all text should be plain, unformatted text. Dashes (-) for dot points are fine and should be kept as the only formatting device used.):
 
 1. Subjective
 2. Observations
