@@ -5,40 +5,66 @@ import ApiKeySetup from "./components/ApiKeySetup";
 import NoteStructureConfig from "./components/NoteStructureConfig";
 import ResultsView from "./components/ResultsView";
 import TextNoteArea from "./components/TextNoteArea";
+import TypedSessionArea from "./components/TypedSessionArea";
 import UploadArea from "./components/UploadArea";
 
 type NoteView = "input" | "structuring" | "results";
 type AppMode = "loading" | "setup" | "notes";
+type InputMode = "record" | "type";
 
 function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | null }) {
 	const [view, setView] = useState<NoteView>("input");
+	const [inputMode, setInputMode] = useState<InputMode>("record");
 	const [transcript, setTranscript] = useState("");
+	const [typedNote, setTypedNote] = useState("");
 	const [structuredNote, setStructuredNote] = useState("");
 	const [extraNote, setExtraNote] = useState("");
 	const [structureInstruction, setStructureInstruction] = useState("");
-	const [referenceFile, setReferenceFile] = useState<File | null>(null);
+	const [isStructureCustomized, setIsStructureCustomized] = useState(false);
 	const [structureError, setStructureError] = useState("");
 
 	const resetForm = () => {
 		setTranscript("");
+		setTypedNote("");
 		setStructuredNote("");
 		setExtraNote("");
 		setStructureInstruction("");
-		setReferenceFile(null);
+		setIsStructureCustomized(false);
 		setStructureError("");
+		setInputMode("record");
 		setView("input");
 	};
 
-	const processTranscript = async (transcriptToProcess: string) => {
+	const changeInputMode = (nextMode: InputMode) => {
+		if (nextMode === inputMode) {
+			return;
+		}
+
+		if (inputMode === "record") {
+			setTranscript("");
+			setExtraNote("");
+		} else {
+			setTypedNote("");
+		}
+
+		setStructureError("");
+		setInputMode(nextMode);
+	};
+
+	const processTranscript = async () => {
+		const transcriptToProcess = inputMode === "record" ? transcript : typedNote;
 		setView("structuring");
 		setStructureError("");
 
 		try {
-			const result = await structureNote({
+			const request = {
 				transcript: transcriptToProcess,
-				quick_note: extraNote,
-				structure_instruction: referenceFile ? "" : structureInstruction,
-			});
+				...(isStructureCustomized && structureInstruction.trim()
+					? { structure_instruction: structureInstruction }
+					: {}),
+				...(inputMode === "record" ? { quick_note: extraNote } : {}),
+			};
+			const result = await structureNote(request);
 			setStructuredNote(result.structured_note);
 			setView("results");
 		} catch (requestError) {
@@ -48,7 +74,7 @@ function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | nul
 	};
 
 	if (view === "results") {
-		return <ResultsView onProcessAnother={resetForm} transcript={transcript} structuredNote={structuredNote} />;
+		return <ResultsView onProcessAnother={resetForm} transcript={inputMode === "record" ? transcript : typedNote} structuredNote={structuredNote} />;
 	}
 
 	return (
@@ -61,19 +87,44 @@ function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | nul
 					</button>
 				) : null}
 			</div>
-			<UploadArea onTranscript={setTranscript} />
-			<TextNoteArea value={extraNote} onChange={setExtraNote} />
+			<section className="space-y-3">
+				<h2 className="text-lg font-semibold">Upload audio</h2>
+				<div className="inline-flex border border-gray-300" role="group" aria-label="Note input mode">
+					<button
+						type="button"
+						className={`px-4 py-2 ${inputMode === "record" ? "bg-[#1a2440] text-[#faf8f2]" : "bg-[#faf8f2] text-[#1a2440]"}`}
+						aria-pressed={inputMode === "record"}
+						onClick={() => changeInputMode("record")}
+					>
+						Record audio
+					</button>
+					<button
+						type="button"
+						className={`border-l border-gray-300 px-4 py-2 ${inputMode === "type" ? "bg-[#1a2440] text-[#faf8f2]" : "bg-[#faf8f2] text-[#1a2440]"}`}
+						aria-pressed={inputMode === "type"}
+						onClick={() => changeInputMode("type")}
+					>
+						Type it out instead
+					</button>
+				</div>
+				{inputMode === "record" ? <UploadArea onTranscript={setTranscript} /> : null}
+			</section>
+			{inputMode === "record" ? (
+				<TextNoteArea value={extraNote} onChange={setExtraNote} />
+			) : (
+				<TypedSessionArea value={typedNote} onChange={setTypedNote} />
+			)}
 			<NoteStructureConfig
 				instruction={structureInstruction}
-				referenceFile={referenceFile}
+				isExpanded={isStructureCustomized}
 				onInstructionChange={setStructureInstruction}
-				onReferenceFileChange={setReferenceFile}
+				onExpandedChange={setIsStructureCustomized}
 			/>
 			<button
 				type="button"
 				className="border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-				onClick={() => void processTranscript(transcript)}
-				disabled={!transcript.trim() || view === "structuring"}
+				onClick={() => void processTranscript()}
+				disabled={!(inputMode === "record" ? transcript : typedNote).trim() || view === "structuring"}
 			>
 				Create note
 			</button>
@@ -81,7 +132,7 @@ function NotesWorkspace({ onManageApiKey }: { onManageApiKey: (() => void) | nul
 			{structureError && (
 				<div className="space-y-2 text-sm text-red-600" role="alert">
 					<p>{structureError}</p>
-					<button type="button" className="border border-gray-300 px-4 py-2 text-gray-900" onClick={() => void processTranscript(transcript)}>
+					<button type="button" className="border border-gray-300 px-4 py-2 text-gray-900" onClick={() => void processTranscript()}>
 						Retry
 					</button>
 				</div>

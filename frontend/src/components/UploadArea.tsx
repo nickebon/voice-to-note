@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { transcribeAudio } from "../api";
 
@@ -14,6 +14,10 @@ export default function UploadArea({ onTranscript }: UploadAreaProps) {
 	const [isDragging, setIsDragging] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const abortControllerRef = useRef<AbortController | null>(null);
+
+	useEffect(() => {
+		return () => abortControllerRef.current?.abort();
+	}, []);
 
 	const selectFile = async (selectedFile: File) => {
 		abortControllerRef.current?.abort();
@@ -64,8 +68,7 @@ export default function UploadArea({ onTranscript }: UploadAreaProps) {
 	};
 
 	return (
-		<section className="space-y-3">
-			<h2 className="text-lg font-semibold">Upload audio</h2>
+		<div className="space-y-3">
 			<div
 				className={`border-2 border-dashed p-6 text-center ${isDragging ? "border-blue-500 bg-blue-50" : "border-gray-300"}`}
 				onDragOver={(event) => {
@@ -95,6 +98,6 @@ export default function UploadArea({ onTranscript }: UploadAreaProps) {
 				<input ref={inputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileChange} />
 			</div>
 			{error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-		</section>
+		</div>
 	);
 }
